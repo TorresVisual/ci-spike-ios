@@ -1,0 +1,32 @@
+name: Spike
+options: { bundleIdPrefix: dev.example }
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    SWIFT_OBJC_BRIDGING_HEADER: App/Spike-Bridging-Header.h
+    HEADER_SEARCH_PATHS: $(SRCROOT)/App
+    LIBRARY_SEARCH_PATHS[sdk=iphoneos*]: $(SRCROOT)/build/rust/device
+    LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]: $(SRCROOT)/build/rust/sim
+    OTHER_LDFLAGS: -lspike_core
+targets:
+  Spike:
+    type: application
+    platform: iOS
+    sources: [App]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.spike
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  SpikeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies: [{ target: Spike }]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.spiketests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Spike.app/Spike
+        BUNDLE_LOADER: $(TEST_HOST)

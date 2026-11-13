@@ -1,0 +1,41 @@
+name: ios
+on: [push, workflow_dispatch]
+permissions: { contents: read }
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain info
+        run: sw_vers; xcodebuild -version; rustc --version
+      - name: Rust targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - name: Build Rust static libs (device + simulator)
+        run: |
+          cd rustlib
+          cargo build --release --target aarch64-apple-ios
+          cargo build --release --target aarch64-apple-ios-sim
+          mkdir -p ../build/rust/device ../build/rust/sim
+          cp target/aarch64-apple-ios/release/libspike_core.a ../build/rust/device/
+          cp target/aarch64-apple-ios-sim/release/libspike_core.a ../build/rust/sim/
+          ls -la ../build/rust/*
+      - name: Generate Xcode project
+        run: brew install xcodegen && xcodegen generate
+      - name: Simulator test
+        run: |
+          xcodebuild test -project Spike.xcodeproj -scheme Spike \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath build/dd-sim CODE_SIGNING_ALLOWED=NO \
+            || { xcrun simctl list devices available; exit 1; }
+      - name: Unsigned IPA (device)
+        run: |
+          xcodebuild build -project Spike.xcodeproj -scheme Spike -configuration Release \
+            -sdk iphoneos -derivedDataPath build/dd-dev \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+          mkdir -p build/ipa/Payload
+          cp -R build/dd-dev/Build/Products/Release-iphoneos/Spike.app build/ipa/Payload/
+          (cd build/ipa && zip -qr ../Spike-unsigned.ipa Payload)
+          ls -la build/Spike-unsigned.ipa
+          lipo -info build/ipa/Payload/Spike.app/Spike || file build/ipa/Payload/Spike.app/Spike
+      - uses: actions/upload-artifact@v4
+        with: { name: Spike-unsigned-ipa, path: build/Spike-unsigned.ipa }
