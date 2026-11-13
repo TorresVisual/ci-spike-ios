@@ -26,15 +26,24 @@ jobs:
           UDID=$(xcrun simctl list devices available iPhone | grep -m1 -oE '[0-9A-F]{8}-[0-9A-F-]{27}')
           echo "simulator: $UDID"
           xcodebuild test -project Spike.xcodeproj -scheme Spike             -destination "id=$UDID" -derivedDataPath build/dd-sim CODE_SIGNING_ALLOWED=NO
-      - name: Unsigned IPA (device)
+      - name: IPA (fake-signed with entitlements so AltStore can read them)
         run: |
           xcodebuild build -project Spike.xcodeproj -scheme Spike -configuration Release \
             -sdk iphoneos -derivedDataPath build/dd-dev \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
-          mkdir -p build/ipa/Payload
+          mkdir -p build/ipa/Payload build/ents
           cp -R build/dd-dev/Build/Products/Release-iphoneos/Spike.app build/ipa/Payload/
+          for f in App/Spike.entitlements AutoFill/SpikeAutoFill.entitlements; do
+            sed 's/\$(AppIdentifierPrefix)//' "$f" > "build/ents/$(basename "$f")"
+          done
+          cat build/ents/Spike.entitlements
+          brew install ldid
+          APP=build/ipa/Payload/Spike.app
+          ldid -Sbuild/ents/Spike.entitlements $APP/Spike
+          ldid -Sbuild/ents/SpikeAutoFill.entitlements $APP/PlugIns/SpikeAutoFill.appex/SpikeAutoFill
+          ldid -e $APP/PlugIns/SpikeAutoFill.appex/SpikeAutoFill
           (cd build/ipa && zip -qr ../Spike-unsigned.ipa Payload)
           ls -la build/Spike-unsigned.ipa
-          lipo -info build/ipa/Payload/Spike.app/Spike || file build/ipa/Payload/Spike.app/Spike
+          lipo -info $APP/Spike
       - uses: actions/upload-artifact@v4
         with: { name: Spike-unsigned-ipa, path: build/Spike-unsigned.ipa }
